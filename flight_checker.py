@@ -2,8 +2,13 @@ import requests
 from datetime import datetime
 import json
 import code
+import os
+from dotenv import load_dotenv
 from ip_location import current_location, get_city_location
 from weather import weekend_forecast, get_weather_forecast
+
+# Load environment variables
+load_dotenv()
 
 # Dictionary of major US cities and their IATA codes
 CITY_TO_IATA = {
@@ -43,7 +48,7 @@ def get_flights(input_data):
         
         # Extract data with the correct keys
         date = input_data.get("dates", [])  # Changed from "date" to "dates"
-        current_city = input_data.get("origin_city")
+        current_city = input_data.get("current_city")
         destinations = [city["city"] for city in input_data.get("destinations", [])]  # Extract city names from objects
         
         if not current_city or not destinations:
@@ -54,7 +59,11 @@ def get_flights(input_data):
         print(f"Input data: {input_data}")
         return {'error': f'Invalid input data: {str(e)}'}
 
-    api_key = "84a3ecef1d1c8c8da04ff1ec65eb53bf"
+    # Get API key from environment variable
+    api_key = os.getenv('AVIATIONSTACK_API_KEY')
+    if not api_key:
+        return {'error': 'API key not found in environment variables'}
+        
     base_url = "http://api.aviationstack.com/v1/flights"
     
     dep_city = current_city
