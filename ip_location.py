@@ -2,104 +2,42 @@ import requests
 import json
 import time
 
-# Modify the global variable to store both city and state
+# Global variables to store location information
 current_location = {
     'city': None,
     'state': None
 }
 
-def get_location_by_ip(ip_address=None):
+def get_current_ip():
     """
-    Get location information for an IP address.
-    If no IP is provided, it returns the location of the client's IP.
+    Get the current public IP address dynamically
     """
     try:
-        # Construct the API URL - using a different free IP geolocation API
-        # as freegeoip.app seems to be unreliable
-        if ip_address:
-            url = f"http://ip-api.com/json/{ip_address}"
-        else:
-            url = "http://ip-api.com/json/"
-        
-        # Make the request
-        response = requests.get(url, timeout=5)
+        # Using ipify API to get current IP
+        response = requests.get('https://api.ipify.org?format=json', timeout=5)
         response.raise_for_status()
-        
-        # Parse the JSON response
-        data = response.json()
-        
-        # Check if the request was successful
-        if data.get('status') == 'fail':
-            return {'error': f"Failed to get location: {data.get('message', 'Unknown error')}"}
-        
-        # Create a formatted result
-        location_info = {
-            'ip': ip_address or data.get('query'),
-            'city': data.get('city', 'Unknown'),
-            'region': data.get('regionName', 'Unknown'),
-            'country': data.get('country', 'Unknown'),
-            'latitude': data.get('lat', 0),
-            'longitude': data.get('lon', 0),
-            'timezone': data.get('timezone', 'Unknown'),
-            'isp': data.get('isp', 'Unknown')
-        }
-        
-        return location_info
-    
-    except requests.exceptions.Timeout:
-        return {'error': "Request timed out"}
-    except requests.exceptions.RequestException as e:
-        return {'error': f"Failed to fetch location data: {str(e)}"}
-    except (KeyError, json.JSONDecodeError) as e:
-        return {'error': f"Failed to parse location data: {str(e)}"}
+        return response.json()['ip']
+    except Exception as e:
+        print(f"Error getting IP address: {str(e)}")
+        return None
 
-def print_location_info(location_info):
-    """Print the location information in a formatted way"""
-    if 'error' in location_info:
-        print(f"Error: {location_info['error']}")
-        return
-    
-    print("\nLocation Information:")
-    print("-" * 50)
-    print(f"IP Address: {location_info['ip']}")
-    print(f"City: {location_info['city']}")
-    print(f"Region: {location_info['region']}")
-    print(f"Country: {location_info['country']}")
-    print(f"Coordinates: {location_info['latitude']}, {location_info['longitude']}")
-    print(f"Timezone: {location_info['timezone']}")
-    print(f"ISP: {location_info['isp']}")
-
-def test_ips():
-    """Test function with various IP addresses"""
-    test_cases = [
-        None,           # Your current IP
-        "8.8.8.8",     # Google DNS
-        "1.1.1.1",     # Cloudflare DNS
-        "17.253.144.10", # Apple
-        "invalid.ip",   # Invalid IP to test error handling
-        "192.168.1.1"  # Local IP to test error handling
-    ]
-    
-    for ip in test_cases:
-        print(f"\nTesting{'your current IP' if ip is None else f' IP: {ip}'}")
-        location = get_location_by_ip(ip)
-        print_location_info(location)
-        time.sleep(1)  # Add delay to avoid rate limiting
-
-def get_city_location(ip_address=None):
+def get_location_from_ip(ip_address=None):
     """
-    Get city and state for an IP address, store it in global variable and return it.
-    If no IP is provided, it returns the location of the client's IP.
-    Returns tuple (city, state) if successful, (None, None) if unsuccessful.
+    Get location from IP address and store in global variable.
+    If no IP provided, uses the client's IP.
+    Returns tuple (city, state) and updates global current_location.
     """
     global current_location
     
     try:
+        # If no IP provided, get current IP
+        if not ip_address:
+            ip_address = get_current_ip()
+            if not ip_address:
+                raise Exception("Could not determine IP address")
+
         # Construct the API URL
-        if ip_address:
-            url = f"http://ip-api.com/json/{ip_address}"
-        else:
-            url = "http://ip-api.com/json/"
+        url = f"http://ip-api.com/json/{ip_address}"
         
         # Make the request
         response = requests.get(url, timeout=5)
@@ -113,26 +51,51 @@ def get_city_location(ip_address=None):
             current_location = {'city': None, 'state': None}
             return None, None
         
-        # Store and return the city and state
-        city = data.get('city', None)
-        state = data.get('regionName', None)
+        # Extract city and state
+        city = data.get('city')
+        state = data.get('regionName')
         
-        current_location = {
+        # Update global variable
+        current_location.update({
             'city': city,
             'state': state
-        }
+        })
         
         return city, state
-    
-    except:
+        
+    except Exception as e:
+        print(f"Error getting location: {str(e)}")
         current_location = {'city': None, 'state': None}
         return None, None
 
-def main():
-    # Example usage
-    test_ips()
+def get_city_location(ip_address=None):
+    """
+    Get city and state for an IP address.
+    Updates global current_location and returns tuple (city, state).
+    If no IP provided, gets current IP automatically.
+    """
+    if not ip_address:
+        ip_address = get_current_ip()
+    return get_location_from_ip(ip_address)
+
+def test_ip_location():
+    """Test function to demonstrate usage"""
+    # Test with dynamic IP
+    print("\nTesting with current IP:")
+    current_ip = get_current_ip()
+    print(f"Current IP: {current_ip}")
+    city, state = get_city_location()
+    print(f"Your location - City: {city}, State: {state}")
+    print(f"Global variable - City: {current_location['city']}, State: {current_location['state']}")
+    
+    # Test with specific IP
+    test_ip = "8.8.8.8"
+    print(f"\nTesting with specific IP ({test_ip}):")
+    city, state = get_city_location(test_ip)
+    print(f"Location - City: {city}, State: {state}")
+    print(f"Global variable - City: {current_location['city']}, State: {current_location['state']}")
 
 if __name__ == "__main__":
-    print("IP Geolocation Tester")
+    print("IP Location Tester")
     print("=" * 50)
-    main() 
+    test_ip_location() 
