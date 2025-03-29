@@ -1,7 +1,9 @@
 import requests
 from datetime import datetime
+import json
+import code
 from ip_location import current_location, get_city_location
-from weather import weekend_forecast, main as get_weather_forecast
+from weather import weekend_forecast, get_weather_forecast
 
 # Dictionary of major US cities and their IATA codes
 CITY_TO_IATA = {
@@ -16,7 +18,8 @@ CITY_TO_IATA = {
     'Las Vegas': 'LAS',
     'Denver': 'DEN',
     'Houston': 'IAH',
-    'Atlanta': 'ATL'
+    'Atlanta': 'ATL',
+    'San Diego': 'SAN'
 }
 
 def get_iata_code(city):
@@ -31,18 +34,30 @@ def get_cool_cities():
     # Extract city names from weekend_forecast
     return [city_data['city'] for city_data in weekend_forecast.get('cities', [])]
 
-def get_flights(api_key):
-    """
-    Get flights between departure city and cool cities from weather forecast.
-    Departure city is taken from current_location global variable.
-    """
+def get_flights(input_data):
+    try:
+        # Convert string input_data to dictionary if needed
+        if isinstance(input_data, str):
+            input_data = input_data.replace("'", '"')
+            input_data = json.loads(input_data)
+        
+        # Extract data with the correct keys
+        date = input_data.get("dates", [])  # Changed from "date" to "dates"
+        current_city = input_data.get("origin_city")
+        destinations = [city["city"] for city in input_data.get("destinations", [])]  # Extract city names from objects
+        
+        if not current_city or not destinations:
+            return {'error': 'Missing required data: current_city or destinations'}
+            
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"Error parsing input: {str(e)}")
+        print(f"Input data: {input_data}")
+        return {'error': f'Invalid input data: {str(e)}'}
+
+    api_key = "84a3ecef1d1c8c8da04ff1ec65eb53bf"
     base_url = "http://api.aviationstack.com/v1/flights"
     
-    # First ensure we have current location
-    get_city_location()
-    
-    # Get departure city from global variable
-    dep_city = current_location.get('city')
+    dep_city = current_city
     if not dep_city:
         dep_city = "Tucson"  # Default city
         print(f"Could not determine your city. Using {dep_city} as default.")
@@ -52,8 +67,7 @@ def get_flights(api_key):
     if not dep_iata:
         return {'error': f"Could not find airport code for {dep_city}"}
     
-    # Get destination cities from weekend_forecast
-    arr_cities = get_cool_cities()
+    arr_cities = destinations
     if not arr_cities:
         return {'error': "No destination cities found in weather forecast"}
     
@@ -79,47 +93,61 @@ def get_flights(api_key):
             response.raise_for_status()
             data = response.json()
             
+            print(f"API Response for {arr_city}: {data}")  # Debug log
+            
             if 'error' in data:
                 print(f"Error fetching flights to {arr_city}: {data['error']['message']}")
+                continue
+            
+            # Check if data exists and has flights
+            if not data.get('data'):
+                print(f"No flights found for {arr_city}")
                 continue
                 
             flights = []
             for flight in data.get('data', []):
-                flight_info = {
-                    'airline': flight.get('airline', {}).get('name'),
-                    'flight_number': flight.get('flight', {}).get('number'),
-                    'departure': {
-                        'airport': flight.get('departure', {}).get('airport'),
-                        'scheduled': flight.get('departure', {}).get('scheduled'),
-                        'terminal': flight.get('departure', {}).get('terminal')
-                    },
-                    'arrival': {
-                        'airport': flight.get('arrival', {}).get('airport'),
-                        'scheduled': flight.get('arrival', {}).get('scheduled'),
-                        'terminal': flight.get('arrival', {}).get('terminal')
-                    },
-                    'status': flight.get('flight_status'),
-                    'arrival_city': arr_city,
-                    # 'temperature': next((city_data['max_temp'] 
-                    #                   for city_data in weekend_forecast['cities'] 
-                    #                   if city_data['city'] == arr_city), None)
-                }
-                flights.append(flight_info)
+                # Only include flights that have both departure and arrival info
+                if flight.get('departure') and flight.get('arrival'):
+                    flight_info = {
+                        'airline': flight.get('airline', {}).get('name'),
+                        'flight_number': flight.get('flight', {}).get('number'),
+                        'departure': {
+                            'airport': flight.get('departure', {}).get('airport'),
+                            'scheduled': flight.get('departure', {}).get('scheduled'),
+                            'terminal': flight.get('departure', {}).get('terminal')
+                        },
+                        'arrival': {
+                            'airport': flight.get('arrival', {}).get('airport'),
+                            'scheduled': flight.get('arrival', {}).get('scheduled'),
+                            'terminal': flight.get('arrival', {}).get('terminal')
+                        },
+                        'status': flight.get('flight_status'),
+                        'arrival_city': arr_city,
+                    }
+                    flights.append(flight_info)
             
-            all_flights.extend(flights)
+            if flights:
+                print(f"Found {len(flights)} flights for {arr_city}")
+                all_flights.extend(flights)
+            else:
+                print(f"No valid flights found for {arr_city}")
             
         except Exception as e:
             print(f"Error fetching flights to {arr_city}: {str(e)}")
             continue
+    
+    if not all_flights:
+        return {'error': "No flights found for any route"}
     
     result = {
         'flights': all_flights,
         'dep_city': dep_city,
         'arr_cities': [city for city in arr_cities if city not in invalid_cities],
         'invalid_cities': invalid_cities,
-        'forecast_dates': weekend_forecast.get('dates', [])
+        'forecast_dates': date
     }
     
+    print(f"Total flights found: {len(all_flights)}")
     return result
 
 def print_flights(result):
@@ -146,28 +174,19 @@ def print_flights(result):
     # Group flights by arrival city
     for arr_city in result['arr_cities']:
         city_flights = [f for f in result['flights'] if f['arrival_city'] == arr_city]
+        
         if city_flights:
-            # print(f"\nDestination: {arr_city} (Forecast: {city_flights[0]['temperature']}°F)")
             print("-" * 40)
-            
-            for flight in city_flights:
+            print(f"Top 3 flights to {arr_city}:")
+            # Only take first 3 flights
+            for flight in city_flights[:3]:
                 print(f"Airline: {flight['airline']}")
-                print(f"Flight Number: {flight['flight_number']}")
-                print(f"Departure: {flight['departure']['airport']}")
-                print(f"         Terminal: {flight['departure']['terminal'] or 'N/A'}")
-                print(f"         Time: {flight['departure']['scheduled']}")
-                print(f"Arrival: {flight['arrival']['airport']}")
-                print(f"         Terminal: {flight['arrival']['terminal'] or 'N/A'}")
-                print(f"         Time: {flight['arrival']['scheduled']}")
-                print(f"Status: {flight['status']}")
+                # print(f"Flight Number: {flight['flight_number']}")
+                # print(f"Departure: {flight['departure']['airport']}")
+                # print(f"         Terminal: {flight['departure']['terminal'] or 'N/A'}")
+                # print(f"         Time: {flight['departure']['scheduled']}")
+                # print(f"Arrival: {flight['arrival']['airport']}")
+                # print(f"         Terminal: {flight['arrival']['terminal'] or 'N/A'}")
+                # print(f"         Time: {flight['arrival']['scheduled']}")
+                # print(f"Status: {flight['status']}")
                 print("-" * 40)
-
-def main():
-    api_key = "84a3ecef1d1c8c8da04ff1ec65eb53bf"
-    
-    print(f"Checking flights from your location to cities with cool weather...")
-    result = get_flights(api_key)
-    print_flights(result)
-
-if __name__ == "__main__":
-    main() 

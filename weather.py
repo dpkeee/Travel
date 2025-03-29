@@ -107,14 +107,14 @@ def update_forecast_with_test_data():
     global weekend_forecast
     weekend_forecast.update(get_test_forecast_data())
 
-def main():
-    global weekend_forecast
-    get_city_location()
+def get_weather_forecast(current_location):
+    #global weekend_forecast
+ 
+    city, state = current_location.split(',')
     
     try:
-        if (current_location.get('city') and 
-            current_location.get('state')):
-            origin_city = f"{current_location['city']}, {current_location['state']}"
+        if city and state:
+            origin_city = f"{city}, {state}"
         else:
             origin_city = FALLBACK_CITY
         
@@ -156,17 +156,7 @@ def main():
         return weekend_forecast
         
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
-        print("Using test data instead...")
+        #print(f"An error occurred: {str(e)}")
+        #print("Using test data instead...")
         update_forecast_with_test_data()
         return weekend_forecast
-
-if __name__ == "__main__":
-    result = main()
-    if result['error']:
-        print(result['error'])
-    else:
-        print(f"\nWeekend dates: {result['dates'][0]} to {result['dates'][1]}")
-        print(f"\nCities within 1000 miles of {result['origin']} with temperatures below 100°F this weekend:")
-        for city_data in result['cities']:
-            print(f"{city_data['city']}")
