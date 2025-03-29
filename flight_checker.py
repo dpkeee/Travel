@@ -160,7 +160,7 @@ def get_flights(input_data):
 
 def print_flights(result):
     """
-    Print flights information in a formatted way
+    Print flights information in a formatted way, grouped by destination
     """
     if 'error' in result:
         print(f"Error: {result['error']}")
@@ -177,24 +177,25 @@ def print_flights(result):
     
     print(f"\nFlights from {result['dep_city']} to cities with cool weather:")
     print(f"Weekend dates: {' to '.join(result['forecast_dates'])}")
-    print("-" * 80)
+    print("=" * 80)  # Main separator
     
     # Group flights by arrival city
     for arr_city in result['arr_cities']:
         city_flights = [f for f in result['flights'] if f['arrival_city'] == arr_city]
         
         if city_flights:
-            print("-" * 40)
-            print(f"Top 3 flights to {arr_city}:")
+            print(f"\nDestination: {arr_city}")
+            print("-" * 40)  # Destination separator
+            
             # Only take first 3 flights
             for flight in city_flights[:3]:
                 print(f"Airline: {flight['airline']}")
-                # print(f"Flight Number: {flight['flight_number']}")
-                # print(f"Departure: {flight['departure']['airport']}")
-                # print(f"         Terminal: {flight['departure']['terminal'] or 'N/A'}")
-                # print(f"         Time: {flight['departure']['scheduled']}")
-                # print(f"Arrival: {flight['arrival']['airport']}")
-                # print(f"         Terminal: {flight['arrival']['terminal'] or 'N/A'}")
-                # print(f"         Time: {flight['arrival']['scheduled']}")
-                # print(f"Status: {flight['status']}")
-                print("-" * 40)
+                print(f"Flight Number: {flight['flight_number']}")
+                print(f"Departure: {flight['departure']['airport']}")
+                print(f"         Terminal: {flight['departure']['terminal'] or 'N/A'}")
+                print(f"         Time: {flight['departure']['scheduled']}")
+                print(f"Arrival: {flight['arrival']['airport']}")
+                print(f"         Terminal: {flight['arrival']['terminal'] or 'N/A'}")
+                print(f"         Time: {flight['arrival']['scheduled']}")
+                print(f"Status: {flight['status']}")
+                print("-" * 40)  # Flight separator
