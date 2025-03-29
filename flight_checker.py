@@ -40,24 +40,29 @@ def get_cool_cities():
     return [city_data['city'] for city_data in weekend_forecast.get('cities', [])]
 
 def get_flights(input_data):
+    print('input_data', input_data)
     try:
-        # Convert string input_data to dictionary if needed
-        if isinstance(input_data, str):
-            input_data = input_data.replace("'", '"')
-            input_data = json.loads(input_data)
+        # Use global variables
+        if not current_location.get('city'):
+            return {'error': 'Current location not found'}
         
-        # Extract data with the correct keys
-        date = input_data.get("dates", [])  # Changed from "date" to "dates"
-        current_city = input_data.get("current_city")
-        destinations = [city["city"] for city in input_data.get("destinations", [])]  # Extract city names from objects
+        if not weekend_forecast.get('cities') or not weekend_forecast.get('dates'):
+            return {'error': 'Weather forecast data not found'}
         
-        if not current_city or not destinations:
+        # Get data from global variables
+        current_city = current_location['city']
+        destinations = weekend_forecast['cities']
+        date = weekend_forecast['dates']
+        
+        # Extract city names from destinations
+        destination_cities = [city["city"] for city in destinations]
+        
+        if not current_city or not destination_cities:
             return {'error': 'Missing required data: current_city or destinations'}
             
-    except (json.JSONDecodeError, KeyError) as e:
-        print(f"Error parsing input: {str(e)}")
-        print(f"Input data: {input_data}")
-        return {'error': f'Invalid input data: {str(e)}'}
+    except Exception as e:
+        print(f"Error accessing global variables: {str(e)}")
+        return {'error': f'Error accessing global variables: {str(e)}'}
 
     # Get API key from environment variable
     api_key = os.getenv('AVIATIONSTACK_API_KEY')
@@ -66,25 +71,19 @@ def get_flights(input_data):
         
     base_url = "http://api.aviationstack.com/v1/flights"
     
-    dep_city = current_city
-    if not dep_city:
-        dep_city = "Tucson"  # Default city
-        print(f"Could not determine your city. Using {dep_city} as default.")
-    
     # Get departure IATA code
-    dep_iata = get_iata_code(dep_city)
+    dep_iata = get_iata_code(current_city)
     if not dep_iata:
-        return {'error': f"Could not find airport code for {dep_city}"}
+        return {'error': f"Could not find airport code for {current_city}"}
     
-    arr_cities = destinations
-    if not arr_cities:
+    if not destination_cities:
         return {'error': "No destination cities found in weather forecast"}
     
     all_flights = []
     invalid_cities = []
     
     # Check flights for each arrival city
-    for arr_city in arr_cities:
+    for arr_city in destination_cities:
         arr_iata = get_iata_code(arr_city)
         if not arr_iata:
             invalid_cities.append(arr_city)
@@ -150,8 +149,8 @@ def get_flights(input_data):
     
     result = {
         'flights': all_flights,
-        'dep_city': dep_city,
-        'arr_cities': [city for city in arr_cities if city not in invalid_cities],
+        'dep_city': current_city,
+        'arr_cities': [city for city in destination_cities if city not in invalid_cities],
         'invalid_cities': invalid_cities,
         'forecast_dates': date
     }
