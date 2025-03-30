@@ -6,6 +6,7 @@ import json
 from ip_location import current_location, get_city_location
 
 # Global variables
+global weekend_forecast
 weekend_forecast = {
     'dates': [],
     'cities': []
@@ -30,7 +31,12 @@ TEST_CITIES = [
 def get_test_forecast_data():
     """Return test data for weekend_forecast when API fails"""
     today = datetime.now()
-    saturday = today + timedelta(days=(5 - today.weekday() + 1))
+        
+# Calculate days until next Saturday
+    days_until_saturday = (5 - today.weekday()) % 7  # Modulo ensures correct calculation for all days
+    saturday = today + timedelta(days=days_until_saturday)
+
+# Calculate Sunday as one day after Saturday
     sunday = saturday + timedelta(days=1)
     
     return {
@@ -80,7 +86,8 @@ def get_weekend_weather(lat, lon):
         data = forecast_response.json()
         
         today = datetime.now()
-        saturday = today + timedelta(days=(5 - today.weekday() + 1))
+        days_until_saturday = (5 - today.weekday()) % 7 
+        saturday = today + timedelta(days=days_until_saturday)
         sunday = saturday + timedelta(days=1)
         weekend_dates = [saturday.strftime('%Y-%m-%d'), sunday.strftime('%Y-%m-%d')]
         
@@ -104,11 +111,10 @@ def get_weekend_weather(lat, lon):
 
 def update_forecast_with_test_data():
     """Update global weekend_forecast with test data"""
-    global weekend_forecast
     weekend_forecast.update(get_test_forecast_data())
 
 def get_weather_forecast(current_location):
-    global weekend_forecast
+    
  
     try:
         # Handle current_location as a dictionary

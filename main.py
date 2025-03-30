@@ -9,7 +9,7 @@ def main():
     
     system_prompt = '''You are an travel agent which helps in getting flight details for cool destination from my origin. Respond with EXACTLY ONE of these formats:
 1. FUNCTION_CALL: python_function_name|input
-2. FINAL_ANSWER: [number]
+2. FINAL_ANSWER: [flight_data]
 
 where python_function_name is one of the following:
 1. get_city_location() - It gets the IP address from the system and returns the current city & state based on ip address
@@ -46,17 +46,21 @@ DO NOT include multiple responses. Give ONE response at a time.'''
             _, function_info = response_text.split(":", 1)
             func_name, params = [x.strip() for x in function_info.split("|", 1)]
             iteration_result = function_caller(func_name, params)
+            
+            last_response = iteration_result
+            iteration_response.append(f"In the {iteration + 1} iteration you called {func_name} with {params} parameters, and the function returned {iteration_result}.")
 
-        # Check if it's the final answer
         elif response_text.startswith("FINAL_ANSWER:"):
             print("\n=== Agent Execution Complete ===")
-            break
+            # Return the last_response which should contain the flight data
+            return last_response
 
-        print(f"  Result: {iteration_result}")
-        last_response = iteration_result
-        iteration_response.append(f"In the {iteration + 1} iteration you called {func_name} with {params} parameters, and the function returned {iteration_result}.")
-
+        #print(f"  Result of iteration {iteration}: {last_response}")
         iteration += 1
+        print('iteration_response....', iteration)
+    
+    # If we reach max iterations without getting FINAL_ANSWER, return the last result
+    return last_response
 
 def function_caller(func_name, params):
     """Simple function caller that maps function names to actual functions"""

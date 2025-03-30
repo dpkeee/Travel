@@ -39,21 +39,20 @@ def get_cool_cities():
     # Extract city names from weekend_forecast
     return [city_data['city'] for city_data in weekend_forecast.get('cities', [])]
 
-def get_flights(input_data):
-    print('input_data', input_data)
+def get_flights(input_data=None):
     try:
-        # Use global variables
-        if not current_location.get('city'):
-            return {'error': 'Current location not found'}
+       
+        #if not current_location.get('city'):
+        #    return {'error': 'Current location not found'}
         
-        if not weekend_forecast.get('cities') or not weekend_forecast.get('dates'):
-            return {'error': 'Weather forecast data not found'}
+        #if not weekend_forecast.get('cities') or not weekend_forecast.get('dates'):
+        #    return {'error': 'Weather forecast data not found'}
         
         # Get data from global variables
         current_city = current_location['city']
         destinations = weekend_forecast['cities']
-        date = weekend_forecast['dates']
-        
+        weekend_dates = weekend_forecast['dates']
+        print('weekend_dates', weekend_dates)
         # Extract city names from destinations
         destination_cities = [city["city"] for city in destinations]
         
@@ -101,7 +100,7 @@ def get_flights(input_data):
             response.raise_for_status()
             data = response.json()
             
-            print(f"API Response for {arr_city}: {data}")  # Debug log
+            #print(f"API Response for {arr_city}: {data}")  # Debug log
             
             if 'error' in data:
                 print(f"Error fetching flights to {arr_city}: {data['error']['message']}")
@@ -114,25 +113,34 @@ def get_flights(input_data):
                 
             flights = []
             for flight in data.get('data', []):
-                # Only include flights that have both departure and arrival info
-                if flight.get('departure') and flight.get('arrival'):
-                    flight_info = {
-                        'airline': flight.get('airline', {}).get('name'),
-                        'flight_number': flight.get('flight', {}).get('number'),
-                        'departure': {
-                            'airport': flight.get('departure', {}).get('airport'),
-                            'scheduled': flight.get('departure', {}).get('scheduled'),
-                            'terminal': flight.get('departure', {}).get('terminal')
-                        },
-                        'arrival': {
-                            'airport': flight.get('arrival', {}).get('airport'),
-                            'scheduled': flight.get('arrival', {}).get('scheduled'),
-                            'terminal': flight.get('arrival', {}).get('terminal')
-                        },
-                        'status': flight.get('flight_status'),
-                        'arrival_city': arr_city,
-                    }
-                    flights.append(flight_info)
+                # Get flight date from departure time
+                if flight.get('departure', {}).get('scheduled'):
+                    flight_date = flight['departure']['scheduled'].split('T')[0]
+                    
+                    # Only include flights that:
+                    # 1. Have both departure and arrival info
+                    # 2. Are on weekend dates
+                    if (flight.get('departure') and 
+                        flight.get('arrival') and 
+                        flight_date in weekend_dates):
+                        flight_info = {
+                            'airline': flight.get('airline', {}).get('name'),
+                            'flight_number': flight.get('flight', {}).get('number'),
+                            'departure': {
+                                'airport': flight.get('departure', {}).get('airport'),
+                                'scheduled': flight.get('departure', {}).get('scheduled'),
+                                'terminal': flight.get('departure', {}).get('terminal')
+                            },
+                            'arrival': {
+                                'airport': flight.get('arrival', {}).get('airport'),
+                                'scheduled': flight.get('arrival', {}).get('scheduled'),
+                                'terminal': flight.get('arrival', {}).get('terminal')
+                            },
+                            'status': flight.get('flight_status'),
+                            'arrival_city': arr_city,
+                            'date': flight_date
+                        }
+                        flights.append(flight_info)
             
             if flights:
                 print(f"Found {len(flights)} flights for {arr_city}")
@@ -152,7 +160,7 @@ def get_flights(input_data):
         'dep_city': current_city,
         'arr_cities': [city for city in destination_cities if city not in invalid_cities],
         'invalid_cities': invalid_cities,
-        'forecast_dates': date
+        'forecast_dates': weekend_dates
     }
     
     print(f"Total flights found: {len(all_flights)}")
@@ -199,3 +207,61 @@ def print_flights(result):
                 print(f"         Time: {flight['arrival']['scheduled']}")
                 print(f"Status: {flight['status']}")
                 print("-" * 40)  # Flight separator
+
+def format_flights_html(result):
+    """
+    Format flight information in HTML for Chrome plugin popup
+    """
+    if 'error' in result:
+        return f'<div class="error">{result["error"]}</div>'
+        
+    if not result.get('flights'):
+        return '<div class="no-flights">No flights found for any route.</div>'
+    
+    html = []
+    
+    # Add header
+    html.append(f'<h2>Flights from {result["dep_city"]} to cities with cool weather</h2>')
+    html.append(f'<p>Weekend dates: {" to ".join(result["forecast_dates"])}</p>')
+    
+    # Add invalid cities warning if any
+    if result.get('invalid_cities'):
+        html.append('<div class="warning">')
+        html.append('<p>Warning: Could not find airport codes for these cities:</p>')
+        html.append('<ul>')
+        for city in result['invalid_cities']:
+            html.append(f'<li>{city}</li>')
+        html.append('</ul>')
+        html.append('</div>')
+    
+    # Group flights by arrival city
+    for arr_city in result['arr_cities']:
+        city_flights = [f for f in result['flights'] if f['arrival_city'] == arr_city]
+        
+        if city_flights:
+            html.append(f'<div class="destination">')
+            html.append(f'<h3>Destination: {arr_city}</h3>')
+            
+            # Only take first 3 flights
+            for flight in city_flights[:3]:
+                html.append('<div class="flight-card">')
+                html.append(f'<h4>{flight["airline"]}</h4>')
+                html.append(f'<p>Flight Number: {flight["flight_number"]}</p>')
+                html.append('<div class="flight-details">')
+                html.append('<div class="departure">')
+                html.append(f'<p>Departure: {flight["departure"]["airport"]}</p>')
+                html.append(f'<p>Terminal: {flight["departure"]["terminal"] or "N/A"}</p>')
+                html.append(f'<p>Time: {flight["departure"]["scheduled"]}</p>')
+                html.append('</div>')
+                html.append('<div class="arrival">')
+                html.append(f'<p>Arrival: {flight["arrival"]["airport"]}</p>')
+                html.append(f'<p>Terminal: {flight["arrival"]["terminal"] or "N/A"}</p>')
+                html.append(f'<p>Time: {flight["arrival"]["scheduled"]}</p>')
+                html.append('</div>')
+                html.append(f'<p class="status">Status: {flight["status"]}</p>')
+                html.append('</div>')
+                html.append('</div>')
+            
+            html.append('</div>')
+    
+    return '\n'.join(html)
